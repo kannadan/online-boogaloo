@@ -1,53 +1,141 @@
 #include <FirebaseESP32.h>
 #include <FirebaseJson.h>
 
-/*
- *  This sketch sends data via HTTP GET requests to data.sparkfun.com service.
- *
- *  You need to get streamId and privateKey at data.sparkfun.com and paste them
- *  below. Or just customize this script to talk to other HTTP servers.
- *
- */
-
 #include <WiFi.h>
+#include "time.h"
+#include <BLEDevice.h>
+#include <BLEUtils.h>
+#include <BLEScan.h>
+#include <BLEAdvertisedDevice.h>
+#include <BLEAddress.h>
 
 #define FIREBASE_HOST "online-boogaloo.firebaseio.com/" //Change to your Firebase RTDB project ID e.g. Your_Project_ID.firebaseio.com
 #define FIREBASE_AUTH "f2tw35fx2P6v1vf3NkkyP0hamRoXv2cW1k4To4pn" //Change to your Firebase RTDB secret password
 
-const char* ssid     = "your-ssid";
-const char* password = "your-password";
 
-const char* host = "data.sparkfun.com";
-const char* streamId   = "....................";
-const char* privateKey = "....................";
+int scanTime = 5; //In seconds
+BLEScan* pBLEScan;
+int temp, hum, pressure, ax, ay, az, voltage_power, voltage, power, rssi_ruuvi, movement, measurement;
 
-FirebaseData firebaseData1;
+const char* ssid     = "OTiT";
+const char* password = "oh8taoh8ta";
+
+const char* ntpServer = "pool.ntp.org";
+
 FirebaseData firebaseData2;
 
 
 String path = "/ruuvidata";
-String nodeID = "Node1"; 
+String nodeID = "Node1";
+ 
+String ruuvimac = "EB:3F:74:AB:F0:D7";
 
-void streamCallback(StreamData data)
+
+const long  gmtOffset_sec = 7200;
+const int   daylightOffset_sec = 3600;
+
+
+//Converts hexadecimal values to decimal values
+int hexadecimalToDecimal(String hexVal)
 {
+    int len = hexVal.length();
+    int base = 1;
 
-  if (data.dataType() == "boolean") {
-    if (data.boolData())
-      Serial.println("Set to High");
-    else
-      Serial.println("Set to Low");
+    int dec_val = 0;
+
+    for (int i = len - 1; i >= 0; i--)
+    {
+        if (hexVal[i] >= '0' && hexVal[i] <= '9')
+        {
+            dec_val += (hexVal[i] - 48) * base;
+
+            base = base * 16;
+        }
+        else if (hexVal[i] >= 'A' && hexVal[i] <= 'F')
+        {
+            dec_val += (hexVal[i] - 55) * base;
+
+            base = base * 16;
+        }
+    }
+    return dec_val;
+}
+
+//Decodes RUUVI raw data and arranges it in an array
+void decodeRuuvi(String hex_data, int rssi){
+    if(hex_data.substring(4, 6) == "05"){
+        temp = hexadecimalToDecimal(hex_data.substring(6, 10))*0.005;
+        hum = hexadecimalToDecimal(hex_data.substring(10, 14))*0.0025;
+        pressure = hexadecimalToDecimal(hex_data.substring(14, 18))*1+50000;
+       
+        ax = hexadecimalToDecimal(hex_data.substring(18, 22));
+        ay = hexadecimalToDecimal(hex_data.substring(22, 26));
+        az = hexadecimalToDecimal(hex_data.substring(26, 30));     
+
+        if(ax > 0xF000){
+          ax = ax - (1 << 16);
+        }
+        if(ay > 0xF000){
+          ay = ay - (1 << 16);
+        }
+        if (az > 0xF000){
+          az = az - (1 << 16);
+        }
+
+        voltage_power = hexadecimalToDecimal(hex_data.substring(30, 34));
+        voltage = (int)((voltage_power & 0x0b1111111111100000) >> 5) + 1600;
+        power = (int)(voltage_power & 0x0b0000000000011111) - 40;
+
+        rssi_ruuvi = rssi;
+
+        movement = hexadecimalToDecimal(hex_data.substring(34, 36));
+        measurement = hexadecimalToDecimal(hex_data.substring(36, 40));
+    }
+}
+
+void sendData(){
+  Serial.print("Temperature: ");
+  Serial.println(temp);
+  Serial.print("Pressure: ");
+  Serial.println(pressure);
+  FirebaseJson json1;
+  json1.add("air-pressure", pressure);
+  json1.add("humidity", hum);
+  json1.add("id", "ruuvi-1");
+  json1.add("temperature", temp);
+  json1.set("timestamp", (double) getTimeStamp());
+  String node = uuid4();
+  if (Firebase.setJSON(firebaseData2, "/" + node, json1)) {
+    Serial.println(firebaseData2.dataType());
+  } else {
+    Serial.println("error sending");
+    Serial.println(firebaseData2.errorReason());
   }
 }
 
+class MyAdvertisedDeviceCallbacks: public BLEAdvertisedDeviceCallbacks {
+    void onResult(BLEAdvertisedDevice advertisedDevice) {
+      //Scans for specific BLE MAC addresses 
+      if(ruuvimac.indexOf(advertisedDevice.getAddress().toString().c_str()) >= 0){ //If the scanned MAC address is in the identified MAC address String
+        String raw_data = String(BLEUtils::buildHexData(nullptr, (uint8_t*)advertisedDevice.getManufacturerData().data(), advertisedDevice.getManufacturerData().length()));
+        raw_data.toUpperCase();
+        decodeRuuvi(raw_data, advertisedDevice.getRSSI());     
+        //sendData();  
+      }  
+    }
+};
 
-void streamTimeoutCallback(bool timeout)
-{
-  if (timeout)
-  {
-    Serial.println();
-    Serial.println("Stream timeout, resume streaming...");
-    Serial.println();
+long getTimeStamp(){
+  struct tm timeinfo;
+  if(!getLocalTime(&timeinfo)){
+    Serial.println("Failed to obtain time");
+    return 0;
   }
+  //Serial.println(&timeinfo, "%A, %B %d %Y %H:%M:%S");
+  time_t now;
+  time(&now);
+  Serial.println(now);
+  return now;
 }
 
 
@@ -57,12 +145,6 @@ void setup()
     delay(10);
     randomSeed(analogRead(0)+analogRead(1));
 
-    // We start by connecting to a WiFi network
-
-    Serial.println();
-    Serial.println();
-    Serial.print("Connecting to ");
-    Serial.println(ssid);
 
     WiFi.begin(ssid, password);
 
@@ -70,49 +152,31 @@ void setup()
         delay(500);
         Serial.print(".");
     }
+    configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
+    getTimeStamp();
 
-    Serial.println("");
-    Serial.println("WiFi connected");
-    Serial.println("IP address: ");
-    Serial.println(WiFi.localIP());
-
-    Serial.println("Connecting to firebase");
-    Serial.println("host address: ");
-    Serial.println(FIREBASE_HOST);
-    
     Firebase.begin(FIREBASE_HOST, FIREBASE_AUTH);
     Firebase.reconnectWiFi(true);
-
-    if (!Firebase.beginStream(firebaseData1, path + "/" + nodeID))
-    {
-      Serial.println("Could not begin stream");
-      Serial.println("REASON: " + firebaseData1.errorReason());
-      Serial.println();
-    }
-    Firebase.setStreamCallback(firebaseData1, streamCallback, streamTimeoutCallback);
+    
+    ruuvimac.toLowerCase();
+    BLEDevice::init("");
+    pBLEScan = BLEDevice::getScan(); //create new scan
+    pBLEScan->setAdvertisedDeviceCallbacks(new MyAdvertisedDeviceCallbacks());
+    pBLEScan->setActiveScan(true); //active scan uses more power, but get results faster
+    pBLEScan->setInterval(100);
+    pBLEScan->setWindow(99);  // less or equal setInterval value
+   
 }
 
 int value = false;
-
+char incoming;
 void loop()
 {
-    FirebaseJson json1;
-    delay(5000);
-    value = !value;
-    json1.add("air-pressure", 1040);
-    json1.add("humidity", 23);
-    json1.add("ruuviId", "ruuvis");
-    json1.add("temperature", 15);
-    String node = uudi4();
 
-    if (Firebase.setBool(firebaseData2, path + "/" + nodeID, value)) {
-      if (value)
-        Serial.println("Set " + nodeID + " to High");
-      else
-        Serial.println("Set " + nodeID + " to Low");
-    } else {
-      Serial.println("Could not set ");
-    }
+    BLEScanResults foundDevices = pBLEScan->start(scanTime, false);
+    pBLEScan->clearResults();   // delete results fromBLEScan buffer to release memory
+    sendData();
+    delay(600000);
 }
 
 String uuid4(){
@@ -132,6 +196,7 @@ String uuid4(){
   res = res + "-";
   Serial.print("-");
   res = res + hex_print(12,0,15);
+  Serial.println("");
   return res;
 }
 
