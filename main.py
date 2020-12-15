@@ -18,6 +18,7 @@ def start(update, context):
 
 
 def weather(update, context):
+    ap, hum, rid, temp, date = db.get_latest()
     # context.bot.send_message(chat_id=update.effective_chat.id, text=get_data())
     context.bot.send_message(chat_id=update.effective_chat.id, text='This command shows the latest weather data from'
                                                                     ' the Firebase database')
@@ -27,28 +28,31 @@ def weather(update, context):
 
 
 def air_pressure(update, context):
+    ap, hum, rid, temp, date = db.get_latest()
     context.bot.send_message(chat_id=update.effective_chat.id, text='Air pressure from {rid} at {date}: {hum}'
                              .format(rid=rid, date=date, hum=hum))
 
 
 def humidity(update, context):
+    ap, hum, rid, temp, date = db.get_latest()
     context.bot.send_message(chat_id=update.effective_chat.id, text='Humidity from {rid} at {date}: {hum}'
                              .format(rid=rid, date=date, hum=hum))
 
 
 def temperature(update, context):
+    ap, hum, rid, temp, date = db.get_latest()
     context.bot.send_message(chat_id=update.effective_chat.id,
                              text='Temperature from {rid} at {date}: {temp}°C'.format(rid=rid, date=date, temp=temp))
 
 
 def weather_graph(update, context):
+    ap, hum, rid, temp, date = db.get_latest()
     context.bot.send_photo(chat_id=update.effective_chat.id, photo=open('graph.png', 'rb'))
     context.bot.send_message(chat_id=update.effective_chat.id, text='Weather graph from last 7 days')
 
 
 if __name__ == '__main__':
     db = DataBase()
-    ap, hum, rid, temp, date = db.get_latest()
     creds = credentials.require(['api'])
     updater = Updater(token=creds.api)
 

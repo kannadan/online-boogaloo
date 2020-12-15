@@ -17,6 +17,7 @@ class DataBase:
         self.data = self.ref.get()
 
     def get_latest(self):
+        self.data = self.ref.get()
         lat_stamp = 0
         for point in self.data:
             data_point = self.data[point]
