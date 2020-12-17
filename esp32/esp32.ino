@@ -28,12 +28,12 @@ FirebaseData firebaseData2;
 
 String path = "/ruuvidata";
 String nodeID = "Node1";
- 
 String ruuvimac = "EB:3F:74:AB:F0:D7";
 String ruuvimac2 = "CC:F2:A1:AE:04:4D";
 
 const long  gmtOffset_sec = 7200;
 const int   daylightOffset_sec = 3600;
+
 int hexadecimalToDecimal(String hexVal)
 {
     int len = hexVal.length();
@@ -68,7 +68,8 @@ int hexadecimalToDecimal(String hexVal)
 //Decodes RUUVI raw data and arranges it in an array
 void decodeRuuvi(String hex_data, int rssi, int id){
     if(hex_data.substring(4, 6) == "05"){
-        //Serial.print(F(hex_data));
+        Serial.println("id");
+        Serial.println(id);
         if (id == 1){
           temp = hexadecimalToDecimal(hex_data.substring(6, 10))*0.005;
           hum = hexadecimalToDecimal(hex_data.substring(10, 14))*0.0025;
@@ -78,6 +79,8 @@ void decodeRuuvi(String hex_data, int rssi, int id){
           az = hexadecimalToDecimal(hex_data.substring(26, 30)); 
         }
         else{
+          Serial.println("idtoisessa");
+          Serial.println(id);
           temp2 = hexadecimalToDecimal(hex_data.substring(6, 10))*0.005;
           hum2 = hexadecimalToDecimal(hex_data.substring(10, 14))*0.0025;
           pressure2 = hexadecimalToDecimal(hex_data.substring(14, 18))*1+50000;
@@ -143,18 +146,24 @@ void sendData(){
 class MyAdvertisedDeviceCallbacks: public BLEAdvertisedDeviceCallbacks {
     void onResult(BLEAdvertisedDevice advertisedDevice) {
       //Scans for specific BLE MAC addresses 
+      Serial.println(advertisedDevice.getAddress().toString().c_str());
       if(ruuvimac.indexOf(advertisedDevice.getAddress().toString().c_str()) >= 0){ //If the scanned MAC address is in the identified MAC address String
         String raw_data = String(BLEUtils::buildHexData(nullptr, (uint8_t*)advertisedDevice.getManufacturerData().data(), advertisedDevice.getManufacturerData().length()));
         raw_data.toUpperCase();
         int ruuvi_id = 1;
+        Serial.println(ruuvi_id);
+        Serial.println(raw_data);
         decodeRuuvi(raw_data, advertisedDevice.getRSSI(),ruuvi_id);
         
         //sendData();
       }  
-      else if(ruuvimac2.indexOf(advertisedDevice.getAddress().toString().c_str()) >= 0){ //If the scanned MAC address is in the identified MAC address String
+      if(ruuvimac2.indexOf(advertisedDevice.getAddress().toString().c_str()) >= 0){ //If the scanned MAC address is in the identified MAC address String
         String raw_data = String(BLEUtils::buildHexData(nullptr, (uint8_t*)advertisedDevice.getManufacturerData().data(), advertisedDevice.getManufacturerData().length()));
         raw_data.toUpperCase();
         int ruuvi_id = 2;
+        Serial.println("RUUVITAG 2!!!!!!!!!!!!");
+        Serial.println(ruuvi_id);
+        Serial.println(raw_data);
         decodeRuuvi(raw_data, advertisedDevice.getRSSI(), ruuvi_id);
         //sendData();
       }  
@@ -195,6 +204,7 @@ void setup()
     Firebase.reconnectWiFi(true);
     
     ruuvimac.toLowerCase();
+    ruuvimac2.toLowerCase();
     BLEDevice::init("");
     pBLEScan = BLEDevice::getScan(); //create new scan
     pBLEScan->setAdvertisedDeviceCallbacks(new MyAdvertisedDeviceCallbacks());
