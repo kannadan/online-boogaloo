@@ -78,7 +78,7 @@ if __name__ == '__main__':
     db = DataBase()
     #creds = credentials.require(['api'])
     #pdater = Updater(token=creds.api)
-    updater = Updater(token="1459062128:AAHekgpf4yzZQ3qyxTBLrTUo5FHo9e0UYZk")
+    updater = Updater(token="")
     dispatcher = updater.dispatcher
 
     start_handler = CommandHandler('start', start)  # Start
