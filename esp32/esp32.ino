@@ -18,8 +18,8 @@ BLEScan* pBLEScan;
 int temp, hum, pressure, ax, ay, az, voltage_power, voltage, power, rssi_ruuvi, movement, measurement;
 int temp2, hum2, pressure2, ax2, ay2, az2, voltage_power2, voltage2, power2, rssi_ruuvi2, movement2, measurement2;
 
-const char* ssid     = "TekinJäsenyysHäikäisee";
-const char* password = "JukkaOrava!123";
+const char* ssid     = "";
+const char* password = "";
 
 const char* ntpServer = "pool.ntp.org";
 
